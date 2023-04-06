@@ -1,0 +1,3 @@
+[submodule "external/vocal-remover"]
+	path = external/vocal-remover
+	url = git@github.com:Keroosha/vocal-remover.git
