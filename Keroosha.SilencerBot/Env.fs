@@ -11,16 +11,11 @@ module Logging =
         config.WriteTo.Console().CreateLogger()
 
 type public BotConfig = {
-    token: string
-    relayUrl: string
-    chanelId: int64
-    adminChatId: int64
-    youtubeDlUrl: string
-    tmpYtdlSavePath: string Option
+  tempSavePath: string
+  connectionString: string
 }
 
-let private readConfig =
-    File.ReadAllText >> JsonSerializer.Deserialize<BotConfig>
+let private readConfig = File.ReadAllText >> JsonSerializer.Deserialize<BotConfig>
 
 let public createConfig (name: string) =
     match Environment.GetEnvironmentVariable(name) with

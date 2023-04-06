@@ -6,6 +6,7 @@ open FluentMigrator.Runner;
 open LinqToDB
 open LinqToDB.Data
 open LinqToDB.DataProvider
+open LinqToDB.DataProvider.PostgreSQL
 open LinqToDB.Mapping
 open Microsoft.Extensions.DependencyInjection
 
@@ -51,6 +52,9 @@ let migrateApp (connectionString: string) =
       .BuildServiceProvider(false)
   use scope = serviceProvider.CreateScope()
   serviceProvider.GetRequiredService<IMigrationRunner>().MigrateUp()
+
+let createContext (connectionString: string) =
+  new DbContext(connectionString, PostgreSQLTools.GetDataProvider())
 
 [<TimestampedMigration(2023us, 4us, 6us, 20us, 8us)>]
 type InitialMigration() =
