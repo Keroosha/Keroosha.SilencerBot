@@ -44,6 +44,7 @@ let migrateApp (connectionString: string) =
   use serviceProvider =
     ServiceCollection()
       .AddFluentMigratorCore()
+      .AddLogging(fun x -> x.AddFluentMigratorConsole() |> ignore)
       .ConfigureRunner(fun x -> 
         x.AddPostgres()
           .WithMigrationsIn(typeof<DbContext>.Assembly)
@@ -51,12 +52,12 @@ let migrateApp (connectionString: string) =
       )
       .BuildServiceProvider(false)
   use scope = serviceProvider.CreateScope()
-  serviceProvider.GetRequiredService<IMigrationRunner>().MigrateUp()
+  scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp()
 
 let createContext (connectionString: string) =
   new DbContext(connectionString, PostgreSQLTools.GetDataProvider())
 
-[<TimestampedMigration(2023us, 4us, 6us, 20us, 8us)>]
+[<Migration(1L, "")>]
 type InitialMigration() =
   inherit AutoReversingMigration()
   override this.Up() =

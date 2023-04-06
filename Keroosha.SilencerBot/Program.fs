@@ -11,12 +11,13 @@ let config = Env.createConfig "SILENCER_BOT_CONFIG_PATH"
 let botConfig = Config.defaultConfig |> Config.withReadTokenFromFile
 
 let ctxFactory = fun () -> Database.createContext <| config.connectionString
-Console.CancelKeyPress |> Event.add (fun _ -> Environment.Exit <| 0)
 
 Database.migrateApp config.connectionString
 
 let botInbox = createBotInbox <| (botConfig, ctxFactory)
 let handleUpdate  (ctx: UpdateContext) = resolveUpdate ctx |> botInbox.Post
+
+Console.CancelKeyPress |> Event.add (fun _ -> Environment.Exit <| 0)
 
 async {
   let! _ = Api.makeRequestAsync botConfig <| Api.deleteWebhookBase()

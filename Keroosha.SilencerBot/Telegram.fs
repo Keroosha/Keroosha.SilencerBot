@@ -20,7 +20,7 @@ let isVoiceRemoveAction(update: Update) =
 let resolveUpdate (ctx: UpdateContext) =
   match ctx.Update with
   | x when isVoiceRemoveAction x ->
-    VoiceRemove { fileId =  x.Message.Value.Audio.Value.FileId; chatId = x.Message.Value.Chat.Id }
+    VoiceRemove { fileId = x.Message.Value.Audio.Value.FileId; chatId = x.Message.Value.Chat.Id }
   | _ -> Unknown
 
 let createBotInbox (cfg: BotConfig, db: unit -> DbContext) = MailboxProcessor.Start(fun (inbox) ->

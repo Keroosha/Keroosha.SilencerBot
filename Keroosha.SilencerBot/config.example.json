@@ -1,3 +1,4 @@
 {
-  "ConnectionString": "Server=127.0.0.1;User id=postgres;password=postgres;database=silencer-bot"
+  "connectionString": "Server=127.0.0.1;User id=postgres;password=postgres;database=silencer-bot",
+  "tempSavePath": "/tmp"
 }
