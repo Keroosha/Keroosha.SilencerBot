@@ -17,7 +17,8 @@ type JobState =
   | [<MapValue("Downloading")>] Downloading = 1
   | [<MapValue("Executing")>] Executing = 2
   | [<MapValue("UploadingResults")>] UploadingResults = 3
-  | [<MapValue("Done")>] Done = 4
+  | [<MapValue("CleanUp")>] CleanUp = 4
+  | [<MapValue("Done")>] Done = 5
   
 type JsonJobContext = {
   fileId: String

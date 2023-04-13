@@ -71,6 +71,7 @@ let createBotInbox (cfg: BotConfig, botCfg: Funogram.Types.BotConfig, dbFactory:
         match! inbox.Receive() with
           | VoiceRemove x ->
             let db = dbFactory()
+            use! trx = db.BeginTransactionAsync() |> Async.AwaitTask
             let! user = db.Users.FirstOrDefaultAsync(fun u -> u.TgId = x.chatId) |> Async.AwaitTask
             match box user with
             | null ->
@@ -91,15 +92,18 @@ let createBotInbox (cfg: BotConfig, botCfg: Funogram.Types.BotConfig, dbFactory:
                                    WorkerId = Nullable()
                                    }
               do! db.InsertAsync(job) |> Async.AwaitTask |> Async.Ignore
+              do! trx.CommitAsync() |> Async.AwaitTask
               do! TgClient.makeRequestAsync botCfg <| Api.sendMessage x.chatId jobCreatedText |> Async.Ignore
               ()
           | Start x ->
             let db = dbFactory()
+            use! trx = Async.AwaitTask <| db.BeginTransactionAsync() 
             match! db.Users.AnyAsync(fun u -> u.TgId = x.id) |> Async.AwaitTask with
             | true -> ()
             | false ->
               let user: User = { Id = Guid.NewGuid(); Name = x.name; TgId = x.id; ChatId = x.chatId }
               do! db.InsertAsync(user) |> Async.AwaitTask |> Async.Ignore
+              do! trx.CommitAsync() |> Async.AwaitTask
               do! TgClient.makeRequestAsync botCfg <| Api.sendMessage x.chatId greetingText |> Async.Ignore
           | Skip -> ()
       with

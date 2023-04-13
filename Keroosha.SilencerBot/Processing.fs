@@ -1,6 +1,7 @@
 module Keroosha.SilencerBot.Processing
 
 open System
+open System.Collections.Generic
 open System.IO
 open System.Net.Http
 open System.Text.Json
@@ -9,6 +10,7 @@ open Funogram.Telegram.Types
 open Keroosha.SilencerBot.Database
 open Keroosha.SilencerBot.Env
 open LinqToDB
+open Microsoft.FSharp.Collections
 open Microsoft.FSharp.Control
 
 module TgClient = Funogram.Tools.Api
@@ -40,16 +42,19 @@ let downloadFile (url: String, filePath: String) =
 let private findJob (dbBuilder: unit -> DbContext, config: BotConfig) =
   task {
     use db = dbBuilder()
-    use! __ = db.BeginTransactionAsync()
-    let! jobInProgress = db.UserJobs.FirstOrDefaultAsync(fun x -> x.WorkerId = config.processingWorkerId)
+    use! trx = db.BeginTransactionAsync()
+    let! jobInProgress = db.UserJobs.FirstOrDefaultAsync(
+      fun x -> x.WorkerId = config.processingWorkerId && x.State <> JobState.Failed && x.State <> JobState.Done)
     match box jobInProgress with
     | null ->
-      let! job = db.UserJobs.FirstOrDefaultAsync(fun x -> x.State <> JobState.Failed && x.State <> JobState.Done)
+      let! job = db.UserJobs.FirstOrDefaultAsync(
+        fun x -> x.State <> JobState.Failed && x.State <> JobState.Done && not x.WorkerId.HasValue)
       match box job with
       | null -> return None
       | _ ->
         let jobWithWorkerId = { job with WorkerId = config.processingWorkerId }
         let! __ = db.InsertOrReplaceAsync(jobWithWorkerId)
+        do! trx.CommitAsync()
         return Some jobWithWorkerId
     | _ -> return Some jobInProgress
   } |> Async.AwaitTask
@@ -57,8 +62,9 @@ let private findJob (dbBuilder: unit -> DbContext, config: BotConfig) =
 let private updateJobState (dbBuilder: unit -> DbContext) (job: UserJob) =
   task {      
     use db = dbBuilder()
-    use! __ = db.BeginTransactionAsync()
-    let! __ = db.InsertOrReplaceAsync job 
+    use! trx = db.BeginTransactionAsync()
+    let! __ = db.InsertOrReplaceAsync job
+    do! trx.CommitAsync() |> Async.AwaitTask
     return job
   } |> Async.AwaitTask
 
@@ -89,8 +95,12 @@ let processExecuting (job: UserJob, botConfig: Funogram.Types.BotConfig, config:
   async {
     Logging.logger.Information $"Processing {job.Id} job"
     let ctx = getContext job
-    // let gpuFlag = if config.useGPU then "--gpu 0" else null
-    let args = ["inference.py"; "--input"; ctx.savePath; "--output_dir"; config.tempSavePath]
+    let gpuFlag = if config.useGPU then ["--gpu 0"] else []
+    let args = List.collect id <|
+               [
+                 ["inference.py"; "--input"; ctx.savePath; "--output_dir"; config.tempSavePath]
+                 gpuFlag
+               ]
     let! stdout, stderr = runProc $"/usr/bin/python" args (Some config.processorWorkingPath)
     let ctxWithOutput = { ctx with stdout = stdout; stderr = stderr }
     return { job with
@@ -103,14 +113,35 @@ let processUploading (job: UserJob, botConfig: Funogram.Types.BotConfig, config:
   async {
     let ctx = getContext job
     let cleanName = Path.GetFileNameWithoutExtension ctx.savePath
-    let withoutVocalsPath = Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Instruments.wav")
-    use f = File.OpenRead withoutVocalsPath
-    Logging.logger.Information $"Uploading results for {job.Id} job"
+    let instrumentalPath = Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Instruments.wav")
+    let vocalsPath = Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Vocals.wav")
+    use fInstrumental = File.OpenRead instrumentalPath
+    use fVocals = File.OpenRead vocalsPath
     
-    let media = InputFile.File (Path.GetFileName withoutVocalsPath, f) 
-    let! res = TgClient.makeRequestAsync botConfig <| Api.sendAudio (ctx.chatId) (media) (0) 
-    return { job with State = JobState.Done }
+    let media = [|
+      InputFile.File (Path.GetFileName instrumentalPath, fInstrumental)
+      InputFile.File (Path.GetFileName vocalsPath, fVocals)
+    |]
+    
+    Logging.logger.Information $"Uploading results for {job.Id} job"
+    // TODO Error handling!
+    let uploadMedia (x: InputFile) = TgClient.makeRequestAsync botConfig <| Api.sendAudio (ctx.chatId) (x) (0)
+    do! media |> Seq.map uploadMedia |> Async.Sequential |> Async.Ignore
+    return { job with State = JobState.CleanUp }
   }
+  
+let processCleanUp (job: UserJob, botConfig: Funogram.Types.BotConfig, config: BotConfig) =
+    async {
+      let ctx = getContext job
+      let cleanName = Path.GetFileNameWithoutExtension ctx.savePath
+      List.iter File.Delete <| [
+        ctx.savePath
+        Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Instruments.wav")
+        Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Vocals.wav")
+      ]
+      return { job with State = JobState.Done }
+    }
+
   
 
 let rec processJob (dbBuilder: unit -> DbContext, botConfig: Funogram.Types.BotConfig, config: BotConfig) (job: UserJob) =
@@ -122,8 +153,10 @@ let rec processJob (dbBuilder: unit -> DbContext, botConfig: Funogram.Types.BotC
     | JobState.Downloading -> do! processDownload args >>= updateAndContinue
     | JobState.Executing -> do! processExecuting args >>= updateAndContinue
     | JobState.UploadingResults -> do! processUploading args >>= updateAndContinue
+    | JobState.CleanUp -> do! processCleanUp args >>= updateAndContinue
     | JobState.Done -> Logging.logger.Information $"Job {job.Id} done"
     | JobState.Failed -> Logging.logger.Error $"Job {job.Id} failed"
+    | x -> do! failJob (job, getContext job) ($"Invalid state {x}") |> updateJobState(dbBuilder) |> Async.Ignore
     ()
   }
 
