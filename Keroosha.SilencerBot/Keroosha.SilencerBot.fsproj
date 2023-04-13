@@ -27,5 +27,9 @@
         <PackageReference Include="System.Text.Json" Version="7.0.2" />
         <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="4.0.2" />
     </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Keroosha.SilencerBot.Misc\Keroosha.SilencerBot.Misc.csproj" />
+    </ItemGroup>
     
 </Project>

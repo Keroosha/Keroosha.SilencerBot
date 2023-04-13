@@ -42,10 +42,10 @@ let runProc filename args startDir =
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
-                FileName = filename,
-                Arguments = ArgumentEscaper.EscapeAndConcatenate args
+                FileName = filename
             )
             
+        List.iter procStartInfo.ArgumentList.Add <| args
         match startDir with | Some d -> procStartInfo.WorkingDirectory <- d | _ -> ()
 
         let outputs = System.Collections.Generic.List<string>()

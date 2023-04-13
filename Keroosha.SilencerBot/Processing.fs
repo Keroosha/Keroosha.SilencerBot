@@ -1,7 +1,6 @@
 module Keroosha.SilencerBot.Processing
 
 open System
-open System.Collections.Generic
 open System.IO
 open System.Net.Http
 open System.Text.Json
@@ -16,11 +15,17 @@ open Microsoft.FSharp.Control
 module TgClient = Funogram.Tools.Api
 
 let http = new HttpClient()
-
 let inline private (>>=) a b = (a, b) |> async.Bind
 let getContext (x: UserJob) = x.Context |> JsonSerializer.Deserialize<JsonJobContext>
 let serializeContext (x: JsonJobContext) = x |> JsonSerializer.Serialize<JsonJobContext>
 let downloadUrl token path = $"https://api.telegram.org/file/bot{token}/{path}"
+
+let getArtifactsPath (ctx: JsonJobContext) =
+  let cleanName = Path.GetFileNameWithoutExtension ctx.savePath
+  
+  Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Instruments.wav"),
+  Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Vocals.wav")
+
 
 let failJob (x: UserJob, ctx: JsonJobContext) (errMessage: String) =
   { x with
@@ -103,18 +108,19 @@ let processExecuting (job: UserJob, botConfig: Funogram.Types.BotConfig, config:
                ]
     let! stdout, stderr = runProc $"/usr/bin/python" args (Some config.processorWorkingPath)
     let ctxWithOutput = { ctx with stdout = stdout; stderr = stderr }
-    return { job with
-               State = JobState.UploadingResults
-               Context = serializeContext ctxWithOutput
-            }
+    
+    let instrumentalPath, vocalsPath = getArtifactsPath ctx
+    return match File.Exists instrumentalPath && File.Exists vocalsPath with
+           | true -> { job with State = JobState.UploadingResults; Context = serializeContext ctxWithOutput }
+           | false ->
+             File.Delete ctx.savePath
+             failJob (job, ctxWithOutput) "Missing artifacts"
   }
 
 let processUploading (job: UserJob, botConfig: Funogram.Types.BotConfig, config: BotConfig) =
   async {
     let ctx = getContext job
-    let cleanName = Path.GetFileNameWithoutExtension ctx.savePath
-    let instrumentalPath = Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Instruments.wav")
-    let vocalsPath = Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Vocals.wav")
+    let instrumentalPath, vocalsPath = getArtifactsPath ctx
     use fInstrumental = File.OpenRead instrumentalPath
     use fVocals = File.OpenRead vocalsPath
     
