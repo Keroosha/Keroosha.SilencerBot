@@ -19,18 +19,6 @@ let inline private (>>=) a b = (a, b) |> async.Bind
 let getContext (x: UserJob) = x.Context |> JsonSerializer.Deserialize<JsonJobContext>
 let serializeContext (x: JsonJobContext) = x |> JsonSerializer.Serialize<JsonJobContext>
 let downloadUrl token path = $"https://api.telegram.org/file/bot{token}/{path}"
-let packAudio name stream =
-  {
-    InputMediaAudio.Media = InputFile.File(name, stream)
-    Thumb = None
-    Caption = None
-    ParseMode = None
-    CaptionEntities = None
-    Duration = None
-    Performer = None
-    Title = Some name
-    Type = "Audio"
-  } |> InputMedia.Audio
 
 let failJob (x: UserJob, ctx: JsonJobContext) (errMessage: String) =
   { x with
@@ -115,7 +103,7 @@ let processUploading (job: UserJob, botConfig: Funogram.Types.BotConfig, config:
   async {
     let ctx = getContext job
     let cleanName = Path.GetFileNameWithoutExtension ctx.savePath
-    let withoutVocalsPath = Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Instrumental.wav")
+    let withoutVocalsPath = Path.Combine(Path.GetDirectoryName ctx.savePath, $"{cleanName}_Instruments.wav")
     use f = File.OpenRead withoutVocalsPath
     Logging.logger.Information $"Uploading results for {job.Id} job"
     
