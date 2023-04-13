@@ -563,3 +563,5 @@ dist
 
 # End of https://www.toptal.com/developers/gitignore/api/csharp,fsharp,node,visualstudiocode
 Keroosha.SilencerBot/token
+
+Keroosha.SilencerBot/config.local.json

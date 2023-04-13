@@ -9,15 +9,16 @@ open Keroosha.SilencerBot.Telegram
 
 let config = Env.createConfig "SILENCER_BOT_CONFIG_PATH"
 let botConfig = Config.defaultConfig |> Config.withReadTokenFromFile
-
 let ctxFactory = fun () -> Database.createContext <| config.connectionString
 
 Database.migrateApp config.connectionString
 
-let botInbox = createBotInbox <| (botConfig, ctxFactory)
+let botInbox = createBotInbox <| (config, botConfig, ctxFactory)
 let handleUpdate  (ctx: UpdateContext) = resolveUpdate ctx |> botInbox.Post
 
 Console.CancelKeyPress |> Event.add (fun _ -> Environment.Exit <| 0)
+
+Processing.processingMain <| (ctxFactory, config, botConfig) |> Async.Start
 
 async {
   let! _ = Api.makeRequestAsync botConfig <| Api.deleteWebhookBase()

@@ -1,4 +1,7 @@
 {
   "connectionString": "Server=127.0.0.1;User id=postgres;password=postgres;database=silencer-bot",
-  "tempSavePath": "/tmp"
+  "tempSavePath": "/tmp",
+  "processingWorkerId": "7632B698-FA2C-431C-90D4-E4562AEE0B0A",
+  "processorWorkingPath": "external/vocal-remover",
+  "useGPU": false
 }

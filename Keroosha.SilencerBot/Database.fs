@@ -1,6 +1,7 @@
 module Keroosha.SilencerBot.Database
 
 open System
+open System.Transactions
 open FluentMigrator
 open FluentMigrator.Runner;
 open LinqToDB
@@ -17,30 +18,45 @@ type JobState =
   | [<MapValue("Executing")>] Executing = 2
   | [<MapValue("UploadingResults")>] UploadingResults = 3
   | [<MapValue("Done")>] Done = 4
+  
+type JsonJobContext = {
+  fileId: String
+  chatId: int64
+  savePath: String
+  stdout: String
+  stderr: String
+}
+
 
 [<CLIMutable>]
 [<Table("Users")>]
+[<NoComparison; NoEquality>]
 type User = {
-  [<Column>] Id: Guid
-  [<Column>] TgId: int64
-  [<Column>] Name: string
+[<PrimaryKey>] Id: Guid
+[<Column>] TgId : int64
+[<Column>] ChatId : int64
+[<Column>] Name : string 
 }
+
 
 [<CLIMutable>]
 [<Table("UserJobs")>]
-type UserJobs = {
-  [<Column>] Id: Guid
+[<NoComparison; NoEquality>]
+type UserJob = {
+  [<PrimaryKey>] Id: Guid
   [<Column>] UserId: Guid
   [<Column>] State: JobState
-  [<Column(DataType = DataType.BinaryJson)>] Context: string
+  [<Column>] WorkerId: Guid Nullable
+  [<Column(DataType = DataType.BinaryJson)>] Context: String
 }
 
-type DbContext(connectionString: string, provider: IDataProvider) =
+
+type DbContext(connectionString: String, provider: IDataProvider) =
     inherit DataConnection(provider, connectionString)
     member this.Users = this.GetTable<User>();
-    member this.UserJobs = this.GetTable<UserJobs>();
+    member this.UserJobs = this.GetTable<UserJob>();
 
-let migrateApp (connectionString: string) =
+let migrateApp (connectionString: String) =
   use serviceProvider =
     ServiceCollection()
       .AddFluentMigratorCore()
@@ -64,12 +80,14 @@ type InitialMigration() =
     this.Create.Table("Users")
       .WithColumn("Id").AsGuid().PrimaryKey()
       .WithColumn("TgId").AsInt64().NotNullable()
+      .WithColumn("ChatId").AsInt64().NotNullable()
       .WithColumn("Name").AsString().NotNullable()
     |> ignore
     this.Create.Table("UserJobs")
       .WithColumn("Id").AsGuid().PrimaryKey()
       .WithColumn("UserId").AsGuid().ForeignKey("Users", "Id")
       .WithColumn("State").AsString().NotNullable().WithDefaultValue("New")
+      .WithColumn("WorkerId").AsGuid().Nullable()
       .WithColumn("Context").AsCustom("JSONB").NotNullable()
     |> ignore
     ()
