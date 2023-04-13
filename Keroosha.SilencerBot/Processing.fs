@@ -100,7 +100,7 @@ let processExecuting (job: UserJob, botConfig: Funogram.Types.BotConfig, config:
   async {
     Logging.logger.Information $"Processing {job.Id} job"
     let ctx = getContext job
-    let gpuFlag = if config.useGPU then ["--gpu 0 --batchsize 2"] else []
+    let gpuFlag = if config.useGPU then ["--gpu"; "0"; "--batchsize"; "2"] else []
     let args = List.collect id <|
                [
                  ["inference.py"; "--input"; ctx.savePath; "--output_dir"; config.tempSavePath]
