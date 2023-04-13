@@ -1,6 +1,6 @@
 [Unit]
 # A short human readable title of the unit
-Description= Keroosha.SilencerBot Prod
+Description=Keroosha.SilencerBot Prod
 # A list of units whose activations will occur before this unit starts.
 After=network.target
 
@@ -13,9 +13,13 @@ After=network.target
 Type=simple
 # Command with arguments to invoke when the unit is activated.
 ExecStart=/opt/apps/Keroosha.SilncerBot/app/Keroosha.SilencerBot
+WorkingDirectory=/opt/apps/Keroosha.SilncerBot/app
 # Configures under what conditions the unit will be restarted.
-Restart=on-failure
+User=apps
+Restart=always
 CPUQuota=15%
+KillSignal=SIGINT
+Environment=SILENCER_BOT_CONFIG_PATH=/opt/apps/Keroosha.SilncerBot/config/config.json
 
 [Install]
 # A list of units who when activated will try and activate this unit

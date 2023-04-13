@@ -121,19 +121,32 @@ let processUploading (job: UserJob, botConfig: Funogram.Types.BotConfig, config:
   async {
     let ctx = getContext job
     let instrumentalPath, vocalsPath = getArtifactsPath ctx
-    use fInstrumental = File.OpenRead instrumentalPath
-    use fVocals = File.OpenRead vocalsPath
-    
-    let media = [|
-      InputFile.File (Path.GetFileName instrumentalPath, fInstrumental)
-      InputFile.File (Path.GetFileName vocalsPath, fVocals)
-    |]
-    
-    Logging.logger.Information $"Uploading results for {job.Id} job"
-    // TODO Error handling!
-    let uploadMedia (x: InputFile) = TgClient.makeRequestAsync botConfig <| Api.sendAudio (ctx.chatId) (x) (0)
-    do! media |> Seq.map uploadMedia |> Async.Sequential |> Async.Ignore
-    return { job with State = JobState.CleanUp }
+   
+    let sizeCheck = [
+      FileInfo(instrumentalPath)
+      FileInfo(vocalsPath) ]
+                    |> List.map (fun x -> Math.Floor(double(x.Length) / double(Math.Pow(1024, 2))))
+                    |> List.fold (fun acc x -> acc && x < double(50)) true
+                    
+    match sizeCheck with
+    | false ->
+      do! TgClient.makeRequestAsync botConfig <| Api.sendMessage ctx.chatId "Не могу загрузить результаты - они весят больше 50мб"
+          |> Async.Ignore
+      return { job with State = JobState.CleanUp }
+    | true ->
+      use fInstrumental = File.OpenRead instrumentalPath
+      use fVocals = File.OpenRead vocalsPath
+      
+      let media = [|
+        InputFile.File (Path.GetFileName instrumentalPath, fInstrumental)
+        InputFile.File (Path.GetFileName vocalsPath, fVocals)
+      |]
+      
+      Logging.logger.Information $"Uploading results for {job.Id} job"
+      // TODO Error handling!
+      let uploadMedia (x: InputFile) = TgClient.makeRequestAsync botConfig <| Api.sendAudio (ctx.chatId) (x) (0)
+      do! media |> Seq.map uploadMedia |> Async.Sequential |> Async.Ignore
+      return { job with State = JobState.CleanUp }
   }
   
 let processCleanUp (job: UserJob, botConfig: Funogram.Types.BotConfig, config: BotConfig) =
